@@ -1,4 +1,4 @@
-# dmijson
+# dmide-json
 Convert dmidecode output - type 16, 17 ( memory stats ) to JSON
 
 ####Run
