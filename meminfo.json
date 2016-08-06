@@ -1,0 +1,57 @@
+{
+  "MemoryDevice":
+  [
+  {
+      "ArrayHandle": "0x0008",
+      "ErrorInformationHandle": "",
+      "TotalWidth": "64 bits",
+      "DataWidth": "64 bits",
+      "Size": "4096 MB",
+      "FormFactor": "SODIMM",
+      "Set": "None",
+      "Locator": "ChannelA-DIMM0",
+      "BankLocator": "BANK 0",
+      "Type": "DDR3",
+      "TypeDetail": "Synchronous",
+      "Speed": "1600 MHz",
+      "Manufacturer": "Samsung",
+      "SerialNumber": "78111110",
+      "AssetTag": "None",
+      "PartNumber": "K4B8G1646B-MYK0",
+      "Rank": "",
+      "ConfiguredClockSpeed": "1600 MHz"
+  }
+,
+  {
+      "ArrayHandle": "0x0008",
+      "ErrorInformationHandle": "",
+      "TotalWidth": "64 bits",
+      "DataWidth": "64 bits",
+      "Size": "8192 MB",
+      "FormFactor": "SODIMM",
+      "Set": "None",
+      "Locator": "ChannelB-DIMM0",
+      "BankLocator": "BANK 2",
+      "Type": "DDR3",
+      "TypeDetail": "Synchronous",
+      "Speed": "1600 MHz",
+      "Manufacturer": "Hynix/Hyundai",
+      "SerialNumber": "13611992",
+      "AssetTag": "None",
+      "PartNumber": "HMT41GS6BFR8A-PB",
+      "Rank": "",
+      "ConfiguredClockSpeed": "1600 MHz"
+  }
+
+  ]
+,
+  "PhysicalMemoryArray":
+  {
+      "Location": "System Board Or Motherboard",
+      "Use": "System Memory",
+      "ErrorCorrectionType": "None",
+      "MaximumCapacity": "16 GB",
+      "ErrorInformationHandle": "",
+      "NumberOfDevices": "2"
+  }
+}

@@ -1,0 +1,163 @@
+#!/bin/bash
+
+#Copyright (c) 2015, paulstuart
+#All rights reserved.
+
+# convert the output of dmidecode into JSON
+#
+# labels are stripped of all non alphanumeric text
+# we look for LABEL: VALUE (splitting on the ':')
+# if there is no ':' then it is a VALUE
+#
+# because sections repeat, each instance is cached
+# in a tmp directory and dumped at the end of processing
+#
+
+unset TAG OLDTAG HANDLE OLDHANDLE PREFIX
+
+quote() { 
+    WHAT="$*"
+    #[[ ${WHAT// /} ]]       || return   # skip if blank
+    [[ ${WHAT} ]]       || return   # skip if blank
+    WHAT="${WHAT/[[:space:]]/}"
+    WHAT=$(echo $WHAT | tr -d '\t') # remove tabs
+    [[ $WHAT && ${IGNORE[${WHAT,,}]} ]] && WHAT=""
+    [[ $WHAT || $LABEL ]] || continue
+
+    # enforce quoting on values that could look like numbers
+    [[ $LABEL =~ BIOSRevision || $LABEL =~ Version || $LABEL =~ Description || $LABEL =~ Address || $LABEL =~ Serial || $LABEL == "Rank" ]] && echo -n "${PREFIX}\"$WHAT\"" && return
+    [[ $* =~ ^[0-9]+(.[0-9])?$ ]] && echo -n "${PREFIX}$WHAT" || echo -n "${PREFIX}\"$WHAT\""
+}
+
+fail() { echo >&2 $* ; exit 1 ; }
+
+emit() {
+    [[ $FILENAME ]] || fail "no filename set"
+    echo -n -e "$*" >> $FILENAME
+}
+
+show() { echo "  {" ; cat $1 ; echo ; echo "  }" ; }
+
+
+tojson() {
+
+TMPDIR=$(mktemp -d)
+
+REJECT="^(Inactive|Table|End Of Table|SMBIOS|#|[0-9])"
+
+declare -A IGNORE=(
+	["unknown"]=true
+	["unspecified"]=true
+	["to be filled by o.e.m."]=true
+	["not provided"]=true
+	["not specified"]=true
+	["not present"]=true
+	["no module installed"]=true
+	["0123456789"]=true
+	["1234567890"]=true
+	["<out of spec>"]=true
+)
+
+while IFS= read -r LINE
+do
+    #LINE=$(echo $LINE | tr -d '\t') # remove tabs
+    [[ $LINE ]] || continue
+    [[ $LINE =~ $REJECT ]]  && continue
+    [[ $LINE =~ ^Handle ]]  && HANDLE="${LINE:7:6}" && continue
+    [[ $LINE =~ ^[A-Z] ]]   && TAG=${LINE//[[:space:]]/} && continue
+    unset SKIP
+
+    # LABEL is all text to left of ":"
+    # VALUE is all text to right of ":"
+    LABEL=${LINE%%:*}
+    VALUE=${LINE##*:}
+
+    # if no ':' they'll be the same, and therefore text represents VALUE
+    [[ $VALUE == $LABEL ]] && unset LABEL
+    [[ $LABEL && $VALUE ]] && BOTH=true || unset BOTH
+
+    # trim whitespace and undesirables as needed
+    LABEL=${LABEL//[()\"\.\/[:space:]-]/}
+    #VALUE=${VALUE##[[:space:]]}
+    VALUE=${VALUE//\"/}
+    #VALUE=$(echo $VALUE | tr -d $'\t' | sed -e 's/\s*$//g')
+
+    mkdir $TMPDIR/$TAG > /dev/null 2>&1
+
+    # TAG represents top level structure that starts at beginning of the line
+    if [[ $TAG != $OLDTAG || $HANDLE != $OLDHANDLE ]]; then
+        # clean up prior tag
+        [[ $PREFIX ]] && emit "\n${PREFIX}]\n" # prefix means list mode
+
+        mkdir $TMPDIR/$TAG > /dev/null 2>&1
+        FILENAME=$TMPDIR/$TAG/$HANDLE
+
+        unset LAST
+        unset PREFIX
+        OLDTAG=$TAG
+        OLDHANDLE=$HANDLE
+    fi
+
+    # if just a VALUE element then we are "SOLO"
+    # which represents a list element
+    [[ $VALUE && -z $LABEL ]] && SOLO=true || unset SOLO
+    [[ $SOLO && $LAST ]] && SKIP=true && VALUE=" " && unset SOLO # errant line we can live without
+
+    # did we encounter an end of list?
+    [[ $LABEL && $VALUE && $PREFIX ]] && emit "\n${PREFIX}],\n" && unset PREFIX 
+
+    # we can't comma separate list items until we know there's another entry
+    # on the next line, which we won't know until then
+    # so we save actual line endings until the *beginning* of the next line
+    # and tack one on at the end of the section to clean up
+
+    [[ $SOLO && $PRIOR ]]    && emit ",\n" # mid list 
+    [[ $SOLO && $LAST ]]     && emit "," # special case 
+    [[ -z $VALUE && $LAST ]] && emit ",\n" 
+    [[ $SKIP ]]              && emit ",\n"
+    [[ $BOTH && $LAST ]]     && emit ",\n"
+
+    # print item name
+    [[ $LABEL ]] && emit "$PREFIX      \"$LABEL\": "
+
+    # print item value, or if none, start a new list 
+    [[ -n $VALUE ]] && emit "$(quote "$VALUE")" || emit  "[\n"
+    [[ $LABEL && -z $VALUE ]] && PREFIX="          " 
+
+    # to compare prior states
+    LAST=$BOTH
+    PRIOR=$SOLO
+done
+
+TAGS=$(ls $TMPDIR | wc -l)
+
+echo "{"
+cd $TMPDIR
+for TAG in *
+do
+    let "TAGS--"
+    echo "  \"$TAG\":"
+    CNT=$(ls $TMPDIR/$TAG | wc -l)
+    [[ $CNT -eq 1 ]] && [[ $TAG -gt 0 ]] && show $TMPDIR/$TAG/* && echo -e "\n," && continue
+    [[ $CNT -eq 1 ]] && [[ $TAG -eq 0 ]] && show $TMPDIR/$TAG/* && continue
+    echo "  ["
+    for FILE in $TMPDIR/$TAG/*
+    do
+        show $FILE
+        let "CNT--"
+        [[ $CNT -gt 0 ]] && echo ","
+    done
+    echo
+    echo "  ]"
+    [[ $TAGS -gt 0 ]] && echo ","
+done
+echo "}"
+
+rm -rf $TMPDIR
+
+}
+
+file=$1
+save=$2
+
+awk '/type 16/,/type 19/' $file | tojson > $save 
